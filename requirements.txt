@@ -8,3 +8,4 @@ geopy==2.4.1
 redis==5.0.1
 aioredis==2.0.1
 supabase==2.3.0
+flask==3.0.0
