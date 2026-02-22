@@ -1,0 +1,9 @@
+aiogram==3.4.1
+aiosqlite==0.20.0
+aiohttp==3.9.3
+python-dotenv==1.0.1
+reportlab==4.1.0
+Pillow==10.2.0
+geopy==2.4.1
+redis==5.0.1
+aioredis==2.0.1
