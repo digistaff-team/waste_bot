@@ -10,11 +10,15 @@ load_dotenv()
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 ADMIN_ID: int = int(os.getenv("ADMIN_ID", "0"))
 
+# ── Supabase ──────────────────────────────────────────────────────────────────
+SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+
 # ── Внешние API ───────────────────────────────────────────────────────────────
 FNS_API_TOKEN: str = os.getenv("FNS_API_TOKEN", "")
 YANDEX_GEO_TOKEN: str = os.getenv("YANDEX_GEO_TOKEN", "")
 
-# ── Хранилище ─────────────────────────────────────────────────────────────────
+# ── Хранилище (локальное, для разработки) ─────────────────────────────────────
 DB_PATH: str = os.getenv("DB_PATH", "waste_bot.db")
 DOCS_PATH: str = os.getenv("DOCS_PATH", "documents/")
 
@@ -25,7 +29,7 @@ REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
 REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
 
 # Использовать Redis вместо MemoryStorage
-USE_REDIS: bool = os.getenv("USE_REDIS", "true").lower() == "true"
+USE_REDIS: bool = os.getenv("USE_REDIS", "false").lower() == "true"
 
 # ── Бизнес-константы ──────────────────────────────────────────────────────────
 # Базовая стоимость перевозки (руб/км/тонна)

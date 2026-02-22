@@ -3,6 +3,7 @@ Vercel Serverless Function для обработки Telegram Webhooks.
 """
 import os
 import logging
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -27,19 +28,6 @@ def get_bot_and_dp():
         from models.database import init_db
         from handlers import registration, seller, buyer, carrier, common
         
-        # Инициализация БД (синхронная обёртка)
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        if loop.is_running():
-            pass  # БД инициализируется при первом запросе
-        else:
-            loop.run_until_complete(init_db())
-        
         # Создание бота и диспетчера
         _bot = Bot(
             token=BOT_TOKEN,
@@ -60,8 +48,15 @@ def get_bot_and_dp():
 async def handle_webhook(update: dict):
     """Обработка входящего обновления от Telegram."""
     from aiogram.types import Update
+    from models.database import init_db
     
     bot, dp = get_bot_and_dp()
+    
+    # Инициализация БД при первом запросе
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"Ошибка инициализации БД: {e}")
     
     # Преобразуем в объект Update
     telegram_update = Update.model_validate(update)
@@ -75,11 +70,13 @@ def handler(request, context):
     Точка входа для Vercel Serverless Function.
     Обрабатывает POST запросы от Telegram Webhook.
     """
-    import asyncio
     import json
     
-    # Только POST запросы
-    if request.get("method", "").upper() != "POST":
+    # Vercel передаёт request как dict
+    method = request.get("method", "POST")
+    
+    # Проверяем метод
+    if isinstance(method, str) and method.upper() != "POST":
         return {
             "statusCode": 405,
             "body": json.dumps({"error": "Method not allowed"}),
@@ -96,8 +93,14 @@ def handler(request, context):
         
         logger.info(f"Received update: {update.get('update_id')}")
         
-        # Обрабатываем асинхронно
-        asyncio.run(handle_webhook(update))
+        # Создаём новый event loop для async
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            loop.run_until_complete(handle_webhook(update))
+        finally:
+            loop.close()
         
         return {
             "statusCode": 200,
