@@ -629,3 +629,56 @@ async def cb_lot_cancel(callback: CallbackQuery) -> None:
             show_alert=True,
         )
     await callback.answer()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Мои сделки
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(F.text == "📊 Мои сделки")
+async def cmd_my_deals(message: Message) -> None:
+    user = await _require_seller(message)
+    if not user:
+        return
+
+    # Получаем завершённые заявки по лотам продавца
+    from models.database import get_user_by_id
+    from models.supabase_db import get_supabase
+    
+    try:
+        supabase = get_supabase()
+        # Получаем лоты продавца
+        lots_result = supabase.table("lots").select("id, fkko_name").eq("seller_id", user["id"]).execute()
+        lot_ids = [lot["id"] for lot in lots_result.data]
+        
+        if not lot_ids:
+            await message.answer(
+                "📭 У вас пока нет завершённых сделок.",
+                reply_markup=kb_seller_main(),
+            )
+            return
+        
+        # Получаем завершённые заявки по этим лотам
+        requests_result = supabase.table("transport_requests").select("*").in_("lot_id", lot_ids).eq("status", "completed").execute()
+        
+        if not requests_result.data:
+            await message.answer(
+                "📭 У вас пока нет завершённых сделок.",
+                reply_markup=kb_seller_main(),
+            )
+            return
+        
+        text = "📊 <b>Ваши завершённые сделки:</b>\n\n"
+        for req in requests_result.data[:10]:
+            lot = next((l for l in lots_result.data if l["id"] == req["lot_id"]), None)
+            if lot:
+                text += f"♻️ {lot['fkko_name'][:30]}\n"
+                text += f"   Заявка #{req['id']} | 💰 {req.get('transport_cost', 0):,.0f} ₽\n\n"
+        
+        await message.answer(text, parse_mode="HTML", reply_markup=kb_seller_main())
+    except Exception as e:
+        logger.error(f"Ошибка получения сделок: {e}")
+        await message.answer(
+            "❌ Ошибка при получении сделок.",
+            reply_markup=kb_seller_main(),
+        )

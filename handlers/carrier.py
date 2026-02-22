@@ -429,3 +429,91 @@ async def cb_doc_waybill(callback: CallbackQuery) -> None:
         )
 
     await callback.answer()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Мои перевозки
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(F.text == "📋 Мои перевозки")
+async def cmd_my_shipments(message: Message) -> None:
+    user = await _require_carrier(message)
+    if not user:
+        return
+
+    requests = await get_requests_for_carrier(user["id"])
+    # Фильтруем только принятые перевозчиком
+    my_requests = [r for r in requests if r.get("carrier_id") == user["id"]]
+
+    if not my_requests:
+        await message.answer(
+            "📭 У вас пока нет принятых перевозок.\n"
+            "Зайдите в «🚛 Доступные заявки» чтобы взять заказ.",
+            reply_markup=kb_carrier_main(),
+        )
+        return
+
+    text = "📋 <b>Ваши перевозки:</b>\n\n"
+    for req in my_requests[:10]:
+        lot = await get_lot_by_id(req["lot_id"])
+        status_emoji = {
+            "accepted": "✅",
+            "in_transit": "🚛",
+            "delivered": "📦",
+            "completed": "✔️",
+        }.get(req["status"], "📋")
+        if lot:
+            text += f"{status_emoji} Заявка #{req['id']}\n"
+            text += f"   ♻️ {lot['fkko_name'][:30]}\n"
+            text += f"   Статус: {req['status']}\n\n"
+
+    await message.answer(text, parse_mode="HTML", reply_markup=kb_carrier_main())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Документы
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(F.text == "📄 Документы")
+async def cmd_documents(message: Message) -> None:
+    user = await _require_carrier(message)
+    if not user:
+        return
+
+    requests = await get_requests_for_carrier(user["id"])
+    my_requests = [r for r in requests if r.get("carrier_id") == user["id"]]
+
+    if not my_requests:
+        await message.answer(
+            "📭 У вас пока нет документов.\n"
+            "Документы появляются после завершения перевозки.",
+            reply_markup=kb_carrier_main(),
+        )
+        return
+
+    # Собираем документы
+    all_docs = []
+    for req in my_requests:
+        docs = await get_documents_by_request(req["id"])
+        for doc in docs:
+            doc["req_id"] = req["id"]
+            all_docs.append(doc)
+
+    if not all_docs:
+        await message.answer(
+            "📭 Документы ещё не созданы.\n"
+            "Они появятся после доставки груза.",
+            reply_markup=kb_carrier_main(),
+        )
+        return
+
+    text = "📄 <b>Ваши документы:</b>\n\n"
+    for doc in all_docs[:10]:
+        doc_type_label = {
+            "transfer_act": "📋 Акт приёма-передачи",
+            "waybill": "🚛 Транспортная накладная",
+        }.get(doc["doc_type"], doc["doc_type"])
+        text += f"{doc_type_label}\n"
+        text += f"   Заявка #{doc['req_id']} | {doc['created_at'][:10]}\n\n"
+
+    await message.answer(text, parse_mode="HTML", reply_markup=kb_carrier_main())

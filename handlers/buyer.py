@@ -683,3 +683,48 @@ async def cb_req_docs(callback: CallbackQuery) -> None:
             reply_markup=kb_generate_docs(req_id),
         )
     await callback.answer()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Мои документы
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(F.text == "📄 Мои документы")
+async def cmd_my_documents(message: Message) -> None:
+    user = await _require_buyer(message)
+    if not user:
+        return
+
+    requests = await get_requests_for_buyer(user["id"])
+    if not requests:
+        await message.answer(
+            "📭 У вас пока нет документов.",
+            reply_markup=kb_buyer_main(),
+        )
+        return
+
+    # Собираем все документы по заявкам
+    all_docs = []
+    for req in requests:
+        docs = await get_documents_by_request(req["id"])
+        for doc in docs:
+            doc["req_id"] = req["id"]
+            all_docs.append(doc)
+
+    if not all_docs:
+        await message.answer(
+            "📭 У вас пока нет документов.",
+            reply_markup=kb_buyer_main(),
+        )
+        return
+
+    text = "📄 <b>Ваши документы:</b>\n\n"
+    for doc in all_docs[:10]:
+        doc_type_label = {
+            "transfer_act": "📋 Акт приёма-передачи",
+            "waybill": "🚛 Транспортная накладная",
+        }.get(doc["doc_type"], doc["doc_type"])
+        text += f"{doc_type_label}\n"
+        text += f"   Заявка #{doc['req_id']} | {doc['created_at'][:10]}\n\n"
+
+    await message.answer(text, parse_mode="HTML", reply_markup=kb_buyer_main())
