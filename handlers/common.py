@@ -1,1 +1,136 @@
-{"\n\nОбщие хэндлеры: профиль пользователя, команды /help, /cancel,\nобработка неизвестных сообщений.\n\"\"\"\nimport logging\nimport aiosqlite\nfrom aiogram import Router, F\nfrom aiogram.types import Message, CallbackQuery\nfrom aiogram.fsm.context import FSMContext\nfrom aiogram.filters import Command\n\nfrom config import ROLE_SELLER, ROLE_BUYER, ROLE_CARRIER, DB_PATH\nfrom models.database import get_user_by_tg_id\nfrom utils.helpers import format_user_card\nfrom keyboards.main_keyboards import (\n    kb_main_by_role, kb_seller_main, kb_buyer_main, kb_carrier_main,\n    kb_generate_docs,\n)\n\nlogger = logging.getLogger(__name__)\nrouter = Router()\n\n\n# ─────────────────────────────────────────────────────────────────────────────\n# /help\n# ─────────────────────────────────────────────────────────────────────────────\n\n@router.message(Command(\"help\"))\nasync def cmd_help(message: Message) -> None:\n    user = await get_user_by_tg_id(message.from_user.id)\n\n    base_help = (\n        \"♻️ <b>WasteBot — помощь</b>\\n\\n\"\n        \"<b>Общие команды:</b>\\n\"\n        \"/start — перезапустить бота / главное меню\\n\"\n        \"/help — эта справка\\n\"\n        \"/cancel — отменить текущее действие\\n\"\n        \"/profile — мой профиль\\n\\n\"\n    )\n\n    if not user:\n        await message.answer(\n            base_help + \"Для начала работы нажмите /start и зарегистрируйтесь.\",\n            parse_mode=\"HTML\",\n        )\n        return\n\n    role_help = {\n        ROLE_SELLER: (\n            \"<b>Команды продавца:</b>\\n\"\n            \"📦 Разместить отход — создать новый лот\\n\"\n            \"📋 Мои лоты — просмотр и управление лотами\\n\"\n            \"📊 Мои сделки — история завершённых сделок\\n\"\n            \"👤 Мой профиль — данные аккаунта\\n\\n\"\n            \"<b>Как разместить лот:</b>\\n\"\n            \"1. Нажмите «📦 Разместить отход»\\n\"\n            \"2. Выберите тип отхода из справочника ФККО\\n\"\n            \"3. Укажите объём, цену и условия\\n\"\n            \"4. Добавьте адрес и фото (опционально)\\n\"\n            \"5. Подтвердите публикацию\"\n        ),\n        ROLE_BUYER: (\n            \"<b>Команды покупателя:</b>\\n\"\n            \"🔍 Найти отходы — поиск с фильтрами\\n\"\n            \"🛒 Мои покупки — статус заявок\\n\"\n            \"📄 Мои документы — акты и накладные\\n\"\n            \"👤 Мой профиль — данные аккаунта\\n\\n\"\n            \"<b>Как купить лот:</b>\\n\"\n            \"1. Нажмите «🔍 Найти отходы»\\n\"\n            \"2. Настройте фильтры (регион, тип, объём, цена)\\n\"\n            \"3. Просмотрите результаты\\n\"\n            \"4. Нажмите «🛒 Купить» на понравившемся лоте\\n\"\n            \"5. Подтвердите заявку\\n\"\n            \"6. Отслеживайте статус в «🛒 Мои покупки»\"\n        ),\n        ROLE_CARRIER: (\n            \"<b>Команды перевозчика:</b>\\n\"\n            \"🚛 Доступные заявки — новые заявки на перевозку\\n\"\n            \"📋 Мои перевозки — принятые заявки\\n\"\n            \"📄 Документы — накладные и акты\\n\"\n            \"👤 Мой профиль — данные аккаунта\\n\\n\"\n            \"<b>Как принять перевозку:</b>\\n\"\n            \"1. Нажмите «🚛 Доступные заявки»\\n\"\n            \"2. Просмотрите детали заявки\\n\"\n            \"3. Нажмите «✅ Принять заявку»\\n\"\n            \"4. Свяжитесь с продавцом\\n\"\n            \"5. Обновляйте статус: забрал → доставил\\n\"\n            \"6. Сформируйте документы\"\n        ),\n    }\n\n    help_text = base_help + role_help.get(user[\"role\"], \"\")\n    await message.answer(\n        help_text,\n        parse_mode=\"HTML\",\n        reply_markup=kb_main_by_role(user[\"role\"]),\n    )\n\n\n# ─────────────────────────────────────────────────────────────────────────────\n# /cancel — отмена текущего FSM-состояния\n# ─────────────────────────────────────────────────────────────────────────────\n\n@router.message(Command(\"cancel\"))\nasync def cmd_cancel(message: Message, state: FSMContext) -> None:\n    current_state = await state.get_state()\n    if current_state is None:\n        await message.answer(\"Нет активного действия для отмены.\")\n        return\n\n    await state.clear()\n    user = await get_user_by_tg_id(message.from_user.id)\n\n    if user:\n        await message.answer(\n            \"✅ Действие отменено.\",\n            reply_markup=kb_main_by_role(user[\"role\"]),\n        )\n    else:\n        await message.answer(\"✅ Действие отменено. Нажмите /start для начала.\")\n\n\n# ─────────────────────────────────────────────────────────────────────────────\n# Профиль пользователя\n# ─────────────────────────────────────────────────────────────────────────────\n\n@router.message(F.text == \"👤 Мой профиль\")\n@router.message(Command(\"profile\"))\nasync def cmd_profile(message: Message) -> None:\n    user = await get_user_by_tg_id(message.from_user.id)\n\n    if not user:\n        await message.answer(\n            \"❌ Вы не зарегистрированы. Нажмите /start для регистрации.\"\n        )\n        return\n\n    card = format_user_card(user)\n    verified_str = \"✅ Верифицирован\" if user.get(\"is_verified\") else \"⏳ Не верифицирован\"\n\n    await message.answer(\n        f\"{card}\\n\\n🔐 Статус: {verified_str}\\n\"\n        f\"📅 Дата регистрации: {user['created_at'][:10]}\",\n        parse_mode=\"HTML\",\n        reply_markup=kb_main_by_role(user[\"role\"]),\n    )\n\n\n# ─────────────────────────────────────────────────────────────────────────────\n# Мои сделки (продавец) — история завершённых лотов\n# ─────────────────────────────────────────────────────────────────────────────\n\n@router.message(F.text == \"📊 Мои сделки\")\nasync def cmd_my_deals(message: Message) -> None:\n    user = await get_user_by_tg_id(message.from_user.id)\n    if not user or user[\"role\"] != ROLE_SELLER:\n        await message.answer(\"⛔ Эта функция доступна только для продавцов.\")\n        return\n\n    import aiosqlite\n    from config import DB_PATH\n\n    async with aiosqlite.connect(DB_PATH) as db:\n        db.row_factory = aiosqlite.Row\n        async with db.execute(\n            \"\"\"SELECT l.*, tr.id as req_id, tr.status as req_status,\n                      tr.transport_cost, tr.created_at as req_date,\n                      u.org_name as buyer_name\n               FROM lots l\n               LEFT JOIN transport_requests tr ON tr.lot_id = l.id\n               LEFT JOIN users u ON u.id = tr.buyer_id\n               WHERE l.seller_id = ?\n               AND l.status IN ('reserved', 'in_transit', 'completed')\n               ORDER BY l.created_at DESC\n               LIMIT 20\"\"\",\n            (user[\"id\"],),\n        ) as cursor:\n            rows = await cursor.fetchall()\n            deals = [dict(r) for r in rows]\n\n    if not deals:\n        await message.answer(\n            \"📭 У вас пока нет активных или завершённых сделок.\",\n            reply_markup=kb_seller_main(),\n        )\n        return\n\n    status_map = {\n        \"pending\": \"⏳ Ожидает перевозчика\",\n        \"accepted\": \"✅ Перевозчик назначен\",\n        \"in_transit\": \"🚛 В пути\",\n        \"delivered\": \"📦 Доставлено\",\n        \"completed\": \"✔️ Завершено\",\n        \"cancelled\": \"❌ Отменено\",\n    }\n\n    lines = [\"📊 <b>Мои сделки:</b>\", \"\"]\n    for deal in deals:\n        req_status = status_map.get(deal.get(\"req_status\", \"\"), \"—\")\n        lines += [\n            f\"🆔 Лот #{deal['id']} | Заявка #{deal.get('req_id', '—')}\",\n            f\"♻️ {deal['fkko_name']}\",\n            f\"📦 {deal['volume']} {deal['unit']}\",\n            f\"💰 {deal['price']:,.0f} ₽ {deal['price_format']}\",\n            f\"🛒 Покупатель: {deal.get('buyer_name', '—')}\",\n            f\"🔖 Статус: {req_status}\",\n            f\"📅 {deal['created_at'][:10]}\",\n            \"─\" * 30,\n        ]\n\n    await message.answer(\n        \"\\n\".join(lines),\n        parse_mode=\"HTML\",\n        reply_markup=kb_seller_main(),\n    )\n\n\n# ─────────────────────────────────────────────────────────────────────────────\n# Документы перевозчика (общий список)\n# ─────────────────────────────────────────────────────────────────────────────\n\n@router.message(F.text == \"📄 Документы\")\nasync def cmd_carrier_docs(message: Message) -> None:\n    user = await get_user_by_tg_id(message.from_user.id)\n    if not user or user[\"role\"] != ROLE_CARRIER:\n        await message.answer(\"⛔ Эта функция доступна только для перевозчиков.\")\n        return\n\n    import aiosqlite\n    from config import DB_PATH\n    from keyboards.main_keyboards import kb_generate_docs\n\n    async with aiosqlite.connect(DB_PATH) as db:\n        db.row_factory = aiosqlite.Row\n        async with db.execute(\n            \"\"\"SELECT tr.id, tr.status, tr.created_at\n               FROM transport_requests tr\n               WHERE tr.carrier_id = ?\n               ORDER BY tr.created_at DESC\n               LIMIT 10\"\"\",\n            (user[\"id\"],),\n        ) as cursor:\n            rows = await cursor.fetchall()\n            requests = [dict(r) for r in rows]\n\n    if not requests:\n        await message.answer(\n            \"📭 У вас нет перевозок для формирования документов.\",\n            reply_markup=kb_carrier_main(),\n        )\n        return\n\n    status_map = {\n        \"accepted\": \"✅ Принята\",\n        \"in_transit\": \"🚛 В пути\",\n        \"delivered\": \"📦 Доставлено\",\n        \"completed\": \"✔️ Завершено\",\n    }\n\n    await message.answer(\n        \"📄 <b>Выберите заявку для формирования документов:</b>\",\n        parse_mode=\"HTML\",\n    )\n\n    for req in requests:\n        status_label = status_map.get(req[\"status\"], req[\"status\"])\n        await message.answer(\n            f\"📋 Заявка #{req['id']} — {status_label} ({req['created_at'][:10]})\",\n            reply_markup=kb_generate_docs(req[\"id\"]),\n        )\n\n\n# ─────────────────────────────────────────────────────────────────────────────\n# Обработчик неизвестных сообщений (fallback)\n# ─────────────────────────────────────────────────────────────────────────────\n\n@router.message()\nasync def fallback_handler(message: Message, state: FSMContext) -> None:\n    \"\"\"Обрабатывает все сообщения, не пойманные другими хэндлерами.\"\"\"\n    current_state = await state.get_state()\n\n    # Если пользователь в FSM — не мешаем\n    if current_state is not None:\n        return\n\n    user = await get_user_by_tg_id(message.from_user.id)\n\n    if not user:\n        await message.answer(\n            \"👋 Добро пожаловать! Нажмите /start для регистрации.\",\n        )\n        return\n\n    await message.answer(\n        \"❓ Не понимаю эту команду.\\n\"\n        \"Используйте кнопки меню или /help для справки.\",\n        reply_markup=kb_main_by_role(user[\"role\"]),\n    )\n\n"}
+"""
+Общие хэндлеры: профиль пользователя, команды /help, /cancel,
+обработка неизвестных сообщений.
+"""
+import logging
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command
+
+from config import ROLE_SELLER, ROLE_BUYER, ROLE_CARRIER
+from models.database import get_user_by_tg_id
+from utils.helpers import format_user_card
+from keyboards.main_keyboards import kb_main_by_role, kb_choose_role
+
+logger = logging.getLogger(__name__)
+router = Router()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /help
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    user = await get_user_by_tg_id(message.from_user.id)
+
+    base_help = (
+        "♻️ <b>WasteBot — помощь</b>\n\n"
+        "<b>Общие команды:</b>\n"
+        "/start — перезапустить бота / главное меню\n"
+        "/help — эта справка\n"
+        "/cancel — отменить текущее действие\n"
+        "/profile — мой профиль\n\n"
+    )
+
+    if not user:
+        await message.answer(
+            base_help + "Для начала работы нажмите /start и зарегистрируйтесь.",
+            parse_mode="HTML",
+        )
+        return
+
+    role_help = {
+        ROLE_SELLER: (
+            "<b>Команды продавца:</b>\n"
+            "📦 Разместить отход — создать новый лот\n"
+            "📋 Мои лоты — просмотр и управление лотами\n"
+            "📊 Мои сделки — история завершённых сделок\n"
+        ),
+        ROLE_BUYER: (
+            "<b>Команды покупателя:</b>\n"
+            "🔍 Найти отходы — поиск по фильтрам\n"
+            "📋 Мои заявки — статус текущих заявок\n"
+            "📊 Мои сделки — история завершённых сделок\n"
+        ),
+        ROLE_CARRIER: (
+            "<b>Команды перевозчика:</b>\n"
+            "📋 Доступные заявки — список заявок на перевозку\n"
+            "🚛 Мои перевозки — текущие и завершённые рейсы\n"
+        ),
+    }
+
+    await message.answer(
+        base_help + role_help.get(user["role"], ""),
+        parse_mode="HTML",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /cancel
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext) -> None:
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("Нет активного действия для отмены.")
+        return
+
+    await state.clear()
+    user = await get_user_by_tg_id(message.from_user.id)
+    
+    if user:
+        await message.answer(
+            "❌ Действие отменено.",
+            reply_markup=kb_main_by_role(user["role"]),
+        )
+    else:
+        await message.answer(
+            "❌ Действие отменено. Нажмите /start для начала работы.",
+            reply_markup=kb_choose_role(),
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /profile
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(Command("profile"))
+async def cmd_profile(message: Message) -> None:
+    user = await get_user_by_tg_id(message.from_user.id)
+    
+    if not user:
+        await message.answer(
+            "Вы не зарегистрированы. Нажмите /start для начала работы.",
+            reply_markup=kb_choose_role(),
+        )
+        return
+
+    await message.answer(
+        format_user_card(user),
+        parse_mode="HTML",
+        reply_markup=kb_main_by_role(user["role"]),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fallback — обработка неизвестных сообщений
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message()
+async def fallback_message(message: Message) -> None:
+    user = await get_user_by_tg_id(message.from_user.id)
+    
+    if not user:
+        await message.answer(
+            "Я вас не понимаю. Нажмите /start для начала работы.",
+            reply_markup=kb_choose_role(),
+        )
+        return
+
+    await message.answer(
+        "Я вас не понимаю. Используйте кнопки меню или /help для справки.",
+        reply_markup=kb_main_by_role(user["role"]),
+    )

@@ -16,6 +16,7 @@ if USE_SUPABASE:
     from models.supabase_db import (
         init_db,
         get_user_by_tg_id,
+        get_user_by_id,
         create_user,
         update_user,
         get_carriers_by_region,
@@ -33,6 +34,7 @@ if USE_SUPABASE:
         get_status_history,
         save_document,
         get_documents_by_request,
+        update_document_tg_file_id,
     )
     logger.info("Используется Supabase")
 else:
@@ -185,6 +187,15 @@ else:
                 f"UPDATE users SET {set_clause} WHERE tg_id = ?", values
             )
             await db.commit()
+
+    async def get_user_by_id(user_id: int) -> Optional[dict]:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM users WHERE id = ?", (user_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
 
     async def get_carriers_by_region(region: str) -> list[dict]:
         async with aiosqlite.connect(DB_PATH) as db:
@@ -407,11 +418,20 @@ else:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
+    async def update_document_tg_file_id(doc_id: int, tg_file_id: str) -> None:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE documents SET tg_file_id = ? WHERE id = ?",
+                (tg_file_id, doc_id),
+            )
+            await db.commit()
+
 
 # Экспорт всех функций
 __all__ = [
     "init_db",
     "get_user_by_tg_id",
+    "get_user_by_id",
     "create_user",
     "update_user",
     "get_carriers_by_region",
@@ -429,4 +449,5 @@ __all__ = [
     "get_status_history",
     "save_document",
     "get_documents_by_request",
+    "update_document_tg_file_id",
 ]

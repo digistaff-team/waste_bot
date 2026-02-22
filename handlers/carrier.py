@@ -3,17 +3,16 @@
 обновление статуса, генерация документов.
 """
 import logging
-import aiosqlite
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from config import ROLE_CARRIER, DB_PATH
+from config import ROLE_CARRIER
 from models.database import (
-    get_user_by_tg_id, get_requests_for_carrier,
+    get_user_by_tg_id, get_user_by_id, get_requests_for_carrier,
     get_transport_request_by_id, get_lot_by_id,
     update_request_status, update_lot_status,
-    get_documents_by_request, save_document,
+    get_documents_by_request, save_document, update_document_tg_file_id,
 )
 from services.document_service import generate_transfer_act, generate_waybill
 from utils.states import CarrierStates
@@ -45,19 +44,10 @@ async def _get_request_parties(req: dict) -> tuple[dict | None, dict | None, dic
     if not lot:
         return None, None, None
 
-    # Продавец — через lot.seller_id
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM users WHERE id = ?", (lot["seller_id"],)
-        ) as cursor:
-            row = await cursor.fetchone()
-            seller = dict(row) if row else None
+    seller = await get_user_by_id(lot["seller_id"])
+    buyer = await get_user_by_id(req["buyer_id"])
 
-        async with db.execute(
-            "SELECT * FROM users WHERE id = ?", (req["buyer_id"],)
-        ) as cursor:
-            row = await cursor.fetchone()
+    return lot, seller, buyer
             buyer = dict(row) if row else None
 
     return lot, seller, buyer
@@ -339,13 +329,7 @@ async def cb_doc_act(callback: CallbackQuery) -> None:
     # Получаем перевозчика
     carrier = None
     if req.get("carrier_id"):
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM users WHERE id = ?", (req["carrier_id"],)
-            ) as cursor:
-                row = await cursor.fetchone()
-                carrier = dict(row) if row else None
+        carrier = await get_user_by_id(req["carrier_id"])
 
     generating_msg = await callback.message.answer("📄 Генерирую акт приёма-передачи...")
 
@@ -369,12 +353,7 @@ async def cb_doc_act(callback: CallbackQuery) -> None:
 
         # Сохраняем tg_file_id для повторной отправки
         if sent.document:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    "UPDATE documents SET tg_file_id = ? WHERE id = ?",
-                    (sent.document.file_id, doc_id),
-                )
-                await db.commit()
+            await update_document_tg_file_id(doc_id, sent.document.file_id)
 
         await generating_msg.delete()
 
@@ -412,13 +391,7 @@ async def cb_doc_waybill(callback: CallbackQuery) -> None:
         return
 
     # Получаем перевозчика
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM users WHERE id = ?", (req["carrier_id"],)
-        ) as cursor:
-            row = await cursor.fetchone()
-            carrier = dict(row) if row else None
+    carrier = await get_user_by_id(req["carrier_id"])
 
     if not carrier:
         await callback.answer("❌ Данные перевозчика не найдены", show_alert=True)
@@ -447,12 +420,7 @@ async def cb_doc_waybill(callback: CallbackQuery) -> None:
             )
 
         if sent.document:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    "UPDATE documents SET tg_file_id = ? WHERE id = ?",
-                    (sent.document.file_id, doc_id),
-                )
-                await db.commit()
+            await update_document_tg_file_id(doc_id, sent.document.file_id)
 
         await generating_msg.delete()
 

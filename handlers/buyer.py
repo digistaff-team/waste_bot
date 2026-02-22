@@ -6,15 +6,14 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-import aiosqlite
 
-from config import ROLE_BUYER, DB_PATH
+from config import ROLE_BUYER
 from models.database import (
     get_user_by_tg_id, search_lots, get_lot_by_id,
     get_requests_for_buyer,
     get_transport_request_by_id, get_status_history,
     get_documents_by_request, update_request_status,
-    update_lot_status,
+    update_lot_status, create_transport_request,
 )
 from services.transport_service import calculate_lot_transport_info, format_transport_cost_breakdown
 from utils.states import BuyerSearchStates
@@ -432,59 +431,42 @@ async def step_confirm_purchase(message: Message, state: FSMContext) -> None:
     user = await get_user_by_tg_id(message.from_user.id)
     lot_id = data["purchase_lot_id"]
 
-    # Атомарная проверка и создание заявки
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        try:
-            # Проверяем статус лота внутри транзакции
-            async with db.execute(
-                "SELECT status FROM lots WHERE id = ? FOR UPDATE",
-                (lot_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
-                if not row or row["status"] != "active":
-                    await message.answer(
-                        "❌ Лот недоступен или уже продан.",
-                        reply_markup=kb_buyer_main(),
-                    )
-                    return
+    # Проверяем статус лота
+    lot = await get_lot_by_id(lot_id)
+    if not lot or lot["status"] != "active":
+        await message.answer(
+            "❌ Лот недоступен или уже продан.",
+            reply_markup=kb_buyer_main(),
+        )
+        return
 
-            # Создаём заявку на перевозку
-            cursor = await db.execute(
-                """INSERT INTO transport_requests
-                   (lot_id, buyer_id, distance_km, transport_cost)
-                   VALUES (?, ?, ?, ?)""",
-                (
-                    lot_id, user["id"],
-                    data.get("purchase_distance"),
-                    data.get("purchase_transport_cost"),
-                ),
-            )
-            req_id = cursor.lastrowid
+    try:
+        # Создаём заявку на перевозку
+        req_id = await create_transport_request({
+            "lot_id": lot_id,
+            "buyer_id": user["id"],
+            "distance_km": data.get("purchase_distance"),
+            "transport_cost": data.get("purchase_transport_cost"),
+        })
 
-            # Резервируем лот
-            await db.execute(
-                "UPDATE lots SET status = 'reserved' WHERE id = ?",
-                (lot_id,),
-            )
+        # Резервируем лот
+        await update_lot_status(lot_id, "reserved")
 
-            await db.commit()
-            await state.clear()
+        await state.clear()
 
-            await message.answer(
-                f"✅ <b>Заявка #{req_id} оформлена!</b>\n\n"
-                f"Ожидайте назначения перевозчика.\n"
-                f"Вы можете отслеживать статус в разделе 🛒 Мои покупки.",
-                reply_markup=kb_buyer_main(),
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            await db.rollback()
-            logger.error("Ошибка при создании заявки: %s", e)
-            await message.answer(
-                "❌ Ошибка при оформлении заявки. Попробуйте позже.",
-                reply_markup=kb_buyer_main(),
-            )
+        await message.answer(
+            f"✅ <b>Заявка #{req_id} оформлена!</b>\n\n"
+            f"Ожидайте назначения перевозчика.\n"
+            f"Вы можете отслеживать статус в разделе 🛒 Мои покупки.",
+            reply_markup=kb_buyer_main(),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error("Ошибка при создании заявки: %s", e)
+        await message.answer(
+            "❌ Ошибка при оформлении заявки. Попробуйте позже.",
+            reply_markup=kb_buyer_main(),
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

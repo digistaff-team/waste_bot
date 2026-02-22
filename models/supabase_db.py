@@ -92,6 +92,19 @@ async def update_user(tg_id: int, fields: dict) -> None:
         raise
 
 
+async def get_user_by_id(user_id: int) -> Optional[dict]:
+    """Получение пользователя по ID."""
+    try:
+        supabase = get_supabase()
+        result = supabase.table("users").select("*").eq("id", user_id).execute()
+        if result.data:
+            return result.data[0]
+        return None
+    except Exception as e:
+        logger.error(f"Ошибка получения пользователя по ID: {e}")
+        return None
+
+
 async def get_carriers_by_region(region: str) -> list[dict]:
     """Получение перевозчиков, работающих в указанном регионе."""
     try:
@@ -351,3 +364,13 @@ async def get_documents_by_request(req_id: int) -> list[dict]:
     except Exception as e:
         logger.error(f"Ошибка получения документов: {e}")
         return []
+
+
+async def update_document_tg_file_id(doc_id: int, tg_file_id: str) -> None:
+    """Обновление Telegram file ID документа."""
+    try:
+        supabase = get_supabase()
+        supabase.table("documents").update({"tg_file_id": tg_file_id}).eq("id", doc_id).execute()
+    except Exception as e:
+        logger.error(f"Ошибка обновления документа: {e}")
+        raise
