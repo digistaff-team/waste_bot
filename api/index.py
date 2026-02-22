@@ -10,28 +10,24 @@ logger = logging.getLogger(__name__)
 
 _bot = None
 _dp = None
-_session = None
 
 
 async def get_bot_and_dp():
     """Ленивая инициализация бота и диспетчера."""
-    global _bot, _dp, _session
+    global _bot, _dp
     
     if _bot is None:
         from aiogram import Bot, Dispatcher
         from aiogram.client.default import DefaultBotProperties
         from aiogram.enums import ParseMode
         from aiogram.fsm.storage.memory import MemoryStorage
-        from aiohttp import ClientSession
         
         BOT_TOKEN = os.getenv("BOT_TOKEN", "")
         
         from handlers import registration, seller, buyer, carrier, common
         
-        _session = ClientSession()
         _bot = Bot(
             token=BOT_TOKEN,
-            session=_session,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
         _dp = Dispatcher(storage=MemoryStorage())
