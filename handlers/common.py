@@ -98,6 +98,7 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(Command("profile"))
+@router.message(F.text == "👤 Мой профиль")
 async def cmd_profile(message: Message) -> None:
     user = await get_user_by_tg_id(message.from_user.id)
     
