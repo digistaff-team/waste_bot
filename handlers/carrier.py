@@ -48,9 +48,6 @@ async def _get_request_parties(req: dict) -> tuple[dict | None, dict | None, dic
     buyer = await get_user_by_id(req["buyer_id"])
 
     return lot, seller, buyer
-            buyer = dict(row) if row else None
-
-    return lot, seller, buyer
 
 
 # ─────────────────────────────────────────────────────────────────────────────
