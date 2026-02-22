@@ -24,7 +24,7 @@ def validate_inn(inn: str) -> bool:
 def validate_phone(phone: str) -> bool:
     """Проверка формата телефона."""
     cleaned = re.sub(r"[\s\-\(\)]", "", phone)
-    return bool(re.fullmatch(r"[+7|8]\d{10}", cleaned))
+    return bool(re.fullmatch(r"(\+7|8)\d{10}", cleaned))
 
 
 def validate_email(email: str) -> bool:
