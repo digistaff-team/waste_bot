@@ -5,31 +5,33 @@ import os
 
 app = Flask(__name__)
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Глобальные переменные для бота
 _bot = None
 _dp = None
+_session = None
 
 
-def get_bot_and_dp():
+async def get_bot_and_dp():
     """Ленивая инициализация бота и диспетчера."""
-    global _bot, _dp
+    global _bot, _dp, _session
     
     if _bot is None:
         from aiogram import Bot, Dispatcher
         from aiogram.client.default import DefaultBotProperties
         from aiogram.enums import ParseMode
         from aiogram.fsm.storage.memory import MemoryStorage
+        from aiohttp import ClientSession
         
         BOT_TOKEN = os.getenv("BOT_TOKEN", "")
         
         from handlers import registration, seller, buyer, carrier, common
         
+        _session = ClientSession()
         _bot = Bot(
             token=BOT_TOKEN,
+            session=_session,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
         _dp = Dispatcher(storage=MemoryStorage())
@@ -48,7 +50,7 @@ async def handle_webhook(update: dict):
     from aiogram.types import Update
     from models.database import init_db
     
-    bot, dp = get_bot_and_dp()
+    bot, dp = await get_bot_and_dp()
     
     try:
         await init_db()
@@ -66,13 +68,17 @@ def webhook():
         update = request.get_json(force=True)
         logger.info(f"Received update: {update.get('update_id')}")
         
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
+        # Используем текущий event loop
         try:
-            loop.run_until_complete(handle_webhook(update))
-        finally:
-            loop.close()
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        loop.run_until_complete(handle_webhook(update))
         
         return jsonify({"ok": True})
     
@@ -98,7 +104,3 @@ def index():
         "name": "WasteBot",
         "status": "running"
     })
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
