@@ -1,5 +1,1 @@
-Пароль базы данных Supabase
--fM/B@4$SJ2Xp@6
 
-Project URL → SUPABASE_URL - https://modmvkrwjtxvuowprsgj.supabase.co
-Anon public key → SUPABASE_ANON_KEY - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vZG12a3J3anR4dnVvd3Byc2dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3ODI1NDksImV4cCI6MjA4NzM1ODU0OX0.DfaUkT7E5LixYO8yxb79YJnOBPw6JGQ3EbccbldVeMk
