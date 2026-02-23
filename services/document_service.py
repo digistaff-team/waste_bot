@@ -4,6 +4,7 @@
 """
 import os
 import logging
+import tempfile
 from datetime import datetime
 from typing import Optional
 
@@ -20,6 +21,14 @@ from reportlab.pdfbase.ttfonts import TTFont
 from config import DOCS_PATH
 
 logger = logging.getLogger(__name__)
+
+# Используем /tmp для serverless (Vercel)
+def get_docs_path() -> str:
+    """Возвращает путь для хранения документов."""
+    # На Vercel файловая система read-only, кроме /tmp
+    if os.environ.get('VERCEL') or not os.access(DOCS_PATH, os.W_OK):
+        return tempfile.gettempdir()
+    return DOCS_PATH
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Регистрация шрифта с поддержкой кириллицы
@@ -90,7 +99,9 @@ def _get_styles(font_name: str) -> dict:
 
 def _ensure_docs_dir() -> None:
     """Создаёт директорию для документов если не существует."""
-    os.makedirs(DOCS_PATH, exist_ok=True)
+    docs_path = get_docs_path()
+    if docs_path != tempfile.gettempdir():
+        os.makedirs(docs_path, exist_ok=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -113,7 +124,7 @@ def generate_transfer_act(
     styles = _get_styles(font_name)
 
     filename = f"transfer_act_{request_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    filepath = os.path.join(DOCS_PATH, filename)
+    filepath = os.path.join(get_docs_path(), filename)
 
     doc = SimpleDocTemplate(
         filepath,
