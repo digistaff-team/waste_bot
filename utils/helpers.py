@@ -106,27 +106,28 @@ def convert_price(
 def format_lot_card(lot: dict) -> str:
     """Форматирование карточки лота для отображения."""
     status_label = LOT_STATUS_LABELS.get(lot.get("status", ""), lot.get("status", ""))
-    price_str = f"{lot['price']:,.0f} ₽ {lot['price_format']}"
-    volume_str = f"{lot['volume']} {lot['unit']}"
+    price = lot.get('price') or 0
+    price_str = f"{price:,.0f} ₽ {lot.get('price_format', '')}"
+    volume_str = f"{lot.get('volume', 0)} {lot.get('unit', '')}"
 
     # Дополнительная цена в другом формате
-    if lot["unit"] == UNIT_TON:
-        volume_tons = lot["volume"]
-    else:
-        volume_tons = m3_to_tons(lot["volume"])
+    volume_tons = lot.get("volume", 0)
+    if lot.get("unit") != UNIT_TON:
+        volume_tons = m3_to_tons(lot.get("volume", 0))
 
-    if lot["price_format"] == PRICE_FORMAT_PER_TON:
-        alt_price = convert_price(lot["price"], PRICE_FORMAT_PER_TON, PRICE_FORMAT_PER_TRIP, volume_tons)
+    price_format = lot.get('price_format', PRICE_FORMAT_PER_TON)
+    if price_format == PRICE_FORMAT_PER_TON:
+        alt_price = convert_price(price, PRICE_FORMAT_PER_TON, PRICE_FORMAT_PER_TRIP, volume_tons)
         alt_str = f"(≈ {alt_price:,.0f} ₽ за рейс)"
     else:
-        alt_price = convert_price(lot["price"], PRICE_FORMAT_PER_TRIP, PRICE_FORMAT_PER_TON, volume_tons)
+        alt_price = convert_price(price, PRICE_FORMAT_PER_TRIP, PRICE_FORMAT_PER_TON, volume_tons)
         alt_str = f"(≈ {alt_price:,.0f} ₽/тонна)"
 
     lines = [
-        f"♻️ <b>{lot['fkko_name']}</b>",
+        f"♻️ <b>{lot.get('fkko_name', 'Неизвестно')}</b>",
         f"📦 Объём: {volume_str}",
         f"💰 Цена: {price_str} {alt_str}",
-        f"🚚 Условие: {lot['condition']}",
+        f"🚚 Условие: {lot.get('condition', 'Не указано')}",
     ]
     if lot.get("address_from"):
         lines.append(f"📍 Откуда: {lot['address_from']}")
@@ -135,7 +136,7 @@ def format_lot_card(lot: dict) -> str:
     if lot.get("valid_until"):
         lines.append(f"📅 Актуален до: {lot['valid_until']}")
     lines.append(f"🔖 Статус: {status_label}")
-    lines.append(f"🆔 Лот #{lot['id']}")
+    lines.append(f"🆔 Лот #{lot.get('id', '?')}")
     return "\n".join(lines)
 
 
@@ -143,12 +144,12 @@ def format_user_card(user: dict) -> str:
     """Форматирование карточки пользователя."""
     role_label = ROLE_LABELS.get(user.get("role", ""), user.get("role", ""))
     lines = [
-        f"👤 <b>{user['org_name']}</b>",
+        f"👤 <b>{user.get('org_name', 'Неизвестно')}</b>",
         f"🏷 Роль: {role_label}",
-        f"📋 ИНН: {user['inn']}",
-        f"🌍 Регион: {user['region']}",
-        f"📞 Телефон: {user['phone']}",
-        f"📧 Email: {user['email']}",
+        f"📋 ИНН: {user.get('inn', 'Не указан')}",
+        f"🌍 Регион: {user.get('region', 'Не указан')}",
+        f"📞 Телефон: {user.get('phone', 'Не указан')}",
+        f"📧 Email: {user.get('email', 'Не указан')}",
     ]
     if user.get("vehicle_types"):
         lines.append(f"🚛 Типы ТС: {user['vehicle_types']}")
@@ -161,18 +162,21 @@ def format_user_card(user: dict) -> str:
 
 def format_transport_request(req: dict, lot: dict, seller: dict) -> str:
     """Форматирование заявки на перевозку."""
+    transport_cost = req.get('transport_cost') or 0
+    distance_km = req.get('distance_km') or '?'
+    
     lines = [
-        f"🚛 <b>Заявка на перевозку #{req['id']}</b>",
+        f"🚛 <b>Заявка на перевозку #{req.get('id', '?')}</b>",
         f"",
-        f"♻️ Отход: {lot['fkko_name']}",
-        f"📦 Объём: {lot['volume']} {lot['unit']}",
-        f"📍 Откуда: {lot['address_from']}",
-        f"🏁 Куда: {lot['address_to']}",
-        f"📏 Расстояние: {req.get('distance_km', '?')} км",
-        f"💰 Стоимость перевозки: {req.get('transport_cost', 0):,.0f} ₽",
+        f"♻️ Отход: {lot.get('fkko_name', 'Неизвестно')}",
+        f"📦 Объём: {lot.get('volume', 0)} {lot.get('unit', '')}",
+        f"📍 Откуда: {lot.get('address_from') or 'Не указан'}",
+        f"🏁 Куда: {lot.get('address_to') or 'Не указан'}",
+        f"📏 Расстояние: {distance_km} км",
+        f"💰 Стоимость перевозки: {transport_cost:,.0f} ₽",
         f"",
-        f"🏭 Продавец: {seller['org_name']}",
-        f"📞 Контакт: {seller['phone']}",
+        f"🏭 Продавец: {seller.get('org_name', 'Неизвестно')}",
+        f"📞 Контакт: {seller.get('phone', 'Не указан')}",
     ]
     return "\n".join(lines)
 
