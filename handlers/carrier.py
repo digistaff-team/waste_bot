@@ -58,11 +58,25 @@ async def _get_request_parties(req: dict) -> tuple[dict | None, dict | None, dic
 async def cmd_available_requests(message: Message, state: FSMContext) -> None:
     user = await _require_carrier(message)
     if not user:
+        logger.warning(f"User is not a carrier: {message.from_user.id}")
         return
 
-    requests = await get_requests_for_carrier(user["id"])
+    logger.info(f"Carrier {user['id']} requesting available requests")
+    
+    try:
+        requests = await get_requests_for_carrier(user["id"])
+        logger.info(f"Found {len(requests)} total requests for carrier")
+    except Exception as e:
+        logger.error(f"Error getting requests: {e}")
+        await message.answer(
+            "❌ Ошибка при получении заявок. Попробуйте позже.",
+            reply_markup=kb_carrier_main(),
+        )
+        return
+    
     # Показываем только pending (не принятые другими)
     pending = [r for r in requests if r["status"] == "pending"]
+    logger.info(f"Found {len(pending)} pending requests")
 
     if not pending:
         await message.answer(
@@ -429,45 +443,6 @@ async def cb_doc_waybill(callback: CallbackQuery) -> None:
         )
 
     await callback.answer()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Мои перевозки
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.message(F.text == "📋 Мои перевозки")
-async def cmd_my_shipments(message: Message) -> None:
-    user = await _require_carrier(message)
-    if not user:
-        return
-
-    requests = await get_requests_for_carrier(user["id"])
-    # Фильтруем только принятые перевозчиком
-    my_requests = [r for r in requests if r.get("carrier_id") == user["id"]]
-
-    if not my_requests:
-        await message.answer(
-            "📭 У вас пока нет принятых перевозок.\n"
-            "Зайдите в «🚛 Доступные заявки» чтобы взять заказ.",
-            reply_markup=kb_carrier_main(),
-        )
-        return
-
-    text = "📋 <b>Ваши перевозки:</b>\n\n"
-    for req in my_requests[:10]:
-        lot = await get_lot_by_id(req["lot_id"])
-        status_emoji = {
-            "accepted": "✅",
-            "in_transit": "🚛",
-            "delivered": "📦",
-            "completed": "✔️",
-        }.get(req["status"], "📋")
-        if lot:
-            text += f"{status_emoji} Заявка #{req['id']}\n"
-            text += f"   ♻️ {lot['fkko_name'][:30]}\n"
-            text += f"   Статус: {req['status']}\n\n"
-
-    await message.answer(text, parse_mode="HTML", reply_markup=kb_carrier_main())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
