@@ -35,30 +35,48 @@ def get_docs_path() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 _FONT_REGISTERED = False
 
+def _get_font_path() -> str:
+    """Возвращает путь к файлу шрифта."""
+    # Пути для поиска шрифта
+    possible_paths = [
+        # Локально в папке fonts проекта
+        os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans.ttf"),
+        # На Vercel (относительно корня проекта)
+        os.path.join(os.getcwd(), "fonts", "DejaVuSans.ttf"),
+        # Системные пути
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/var/task/fonts/DejaVuSans.ttf",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    
+    return None
+
+
 def _ensure_font() -> str:
-    """Регистрирует шрифт DejaVu (если доступен) и возвращает его имя."""
+    """Регистрирует шрифт DejaVu и возвращает его имя."""
     global _FONT_REGISTERED
     font_name = "DejaVu"
+    
     if _FONT_REGISTERED:
         return font_name
 
-    font_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        "/Library/Fonts/Arial Unicode MS.ttf",
-        "DejaVuSans.ttf",
-    ]
-    for path in font_paths:
-        if os.path.exists(path):
-            try:
-                pdfmetrics.registerFont(TTFont(font_name, path))
-                _FONT_REGISTERED = True
-                return font_name
-            except Exception:
-                pass
+    font_path = _get_font_path()
+    
+    if font_path:
+        try:
+            pdfmetrics.registerFont(TTFont(font_name, font_path))
+            _FONT_REGISTERED = True
+            logger.info(f"Шрифт DejaVu загружен: {font_path}")
+            return font_name
+        except Exception as e:
+            logger.error(f"Ошибка загрузки шрифта: {e}")
 
-    # Fallback — встроенный Helvetica (без кириллицы, но не упадёт)
-    logger.warning("Шрифт DejaVu не найден, используется Helvetica (кириллица может не отображаться)")
+    # Fallback — встроенный Helvetica (без кириллицы)
+    logger.warning("Шрифт DejaVu не найден, используется Helvetica (кириллица не отображается)")
     return "Helvetica"
 
 
