@@ -39,18 +39,19 @@ def _get_font_path() -> str:
     """Возвращает путь к файлу шрифта."""
     # Пути для поиска шрифта
     possible_paths = [
-        # Локально в папке fonts проекта
-        os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans.ttf"),
-        # На Vercel (относительно корня проекта)
-        os.path.join(os.getcwd(), "fonts", "DejaVuSans.ttf"),
-        # Системные пути
+        # На Vercel (переменная окружения)
+        os.path.join(os.environ.get('PWD', ''), "fonts", "DejaVuSans.ttf"),
+        # Относительно текущего файла
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts", "DejaVuSans.ttf"),
+        # Системные пути Linux
+        "/var/task/fonts/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        "/var/task/fonts/DejaVuSans.ttf",
     ]
     
     for path in possible_paths:
         if os.path.exists(path):
+            logger.info(f"Найден шрифт: {path}")
             return path
     
     return None
@@ -280,7 +281,7 @@ def generate_waybill(
     styles = _get_styles(font_name)
 
     filename = f"waybill_{request_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    filepath = os.path.join(DOCS_PATH, filename)
+    filepath = os.path.join(get_docs_path(), filename)
 
     doc = SimpleDocTemplate(
         filepath,
