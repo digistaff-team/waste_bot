@@ -374,3 +374,34 @@ async def update_document_tg_file_id(doc_id: int, tg_file_id: str) -> None:
     except Exception as e:
         logger.error(f"Ошибка обновления документа: {e}")
         raise
+
+
+async def get_deals_for_seller(seller_id: int) -> list[dict]:
+    """Получение завершённых сделок для продавца."""
+    try:
+        supabase = get_supabase()
+        
+        # Получаем лоты продавца
+        lots_result = supabase.table("lots").select("id, fkko_name").eq("seller_id", seller_id).execute()
+        lot_ids = [lot["id"] for lot in lots_result.data]
+        
+        if not lot_ids:
+            return []
+        
+        # Получаем завершённые заявки по этим лотам
+        result = supabase.table("transport_requests").select(
+            "id, lot_id, buyer_id, distance_km, transport_cost, status, created_at"
+        ).in_("lot_id", lot_ids).eq("status", "completed").order("created_at", desc=True).limit(50).execute()
+        
+        # Добавляем информацию о лотах
+        deals = []
+        for req in result.data:
+            lot = next((l for l in lots_result.data if l["id"] == req["lot_id"]), None)
+            if lot:
+                req["fkko_name"] = lot["fkko_name"]
+                deals.append(req)
+        
+        return deals
+    except Exception as e:
+        logger.error(f"Ошибка получения сделок: {e}")
+        return []

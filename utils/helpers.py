@@ -17,13 +17,46 @@ from config import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 def validate_inn(inn: str) -> bool:
-    """Базовая проверка формата ИНН (10 или 12 цифр)."""
-    return bool(re.fullmatch(r"\d{10}|\d{12}", inn.strip()))
+    """
+    Проверка ИНН: формат + контрольная сумма.
+    ИНН юридического лица — 10 цифр, ИП — 12 цифр.
+    """
+    inn = inn.strip()
+    if not re.fullmatch(r"\d{10}|\d{12}", inn):
+        return False
+    
+    # Проверка контрольной суммы
+    if len(inn) == 10:
+        # Для юридических лиц (10 знаков)
+        # Коэффициенты для проверки: 2, 4, 10, 3, 5, 9, 4, 6, 8, 0
+        coeffs = [2, 4, 10, 3, 5, 9, 4, 6, 8, 0]
+        checksum = sum(int(inn[i]) * coeffs[i] for i in range(9))
+        check_digit = checksum % 11
+        if check_digit > 9:
+            check_digit = check_digit % 10
+        return check_digit == int(inn[9])
+    else:
+        # Для индивидуальных предпринимателей (12 знаков)
+        # Первые 11 знаков
+        coeffs1 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8, 0]
+        checksum1 = sum(int(inn[i]) * coeffs1[i] for i in range(10))
+        check_digit1 = checksum1 % 11
+        if check_digit1 > 9:
+            check_digit1 = check_digit1 % 10
+        
+        # Вторые 11 знаков
+        coeffs2 = [3, 2, 7, 4, 10, 3, 5, 9, 4, 6, 8, 0]
+        checksum2 = sum(int(inn[i]) * coeffs2[i] for i in range(11))
+        check_digit2 = checksum2 % 11
+        if check_digit2 > 9:
+            check_digit2 = check_digit2 % 10
+        
+        return check_digit1 == int(inn[10]) and check_digit2 == int(inn[11])
 
 
 def validate_phone(phone: str) -> bool:
     """Проверка формата телефона."""
-    cleaned = re.sub(r"[\s\-\(\)]", "", phone)
+    cleaned = re.sub(r"[\s\-()]+", "", phone)
     return bool(re.fullmatch(r"(\+7|8)\d{10}", cleaned))
 
 

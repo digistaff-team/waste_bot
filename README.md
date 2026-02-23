@@ -108,7 +108,7 @@ Waste_bot/
 ├── bot.py                 # Точка входа (polling)
 ├── config.py              # Конфигурация
 ├── api/
-│   └── webhook.py         # Vercel serverless endpoint
+│   └── index.py           # Vercel serverless endpoint (/api/webhook)
 ├── handlers/              # Хэндлеры бота
 │   ├── registration.py    # Регистрация пользователей
 │   ├── seller.py          # Функции продавца

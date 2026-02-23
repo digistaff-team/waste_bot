@@ -35,6 +35,7 @@ if USE_SUPABASE:
         save_document,
         get_documents_by_request,
         update_document_tg_file_id,
+        get_deals_for_seller,
     )
     logger.info("Используется Supabase")
 else:
