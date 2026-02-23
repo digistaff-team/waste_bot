@@ -35,9 +35,11 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
     if user:
         from keyboards.main_keyboards import kb_main_by_role
+        from config import ROLE_LABELS
+        role_label = ROLE_LABELS.get(user['role'], user['role'])
         await message.answer(
             f"👋 С возвращением, <b>{user['org_name']}</b>!\n"
-            f"Ваша роль: {user['role']}",
+            f"Ваша роль: {role_label}",
             reply_markup=kb_main_by_role(user["role"]),
             parse_mode="HTML",
         )
