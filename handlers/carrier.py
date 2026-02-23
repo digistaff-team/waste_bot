@@ -345,6 +345,8 @@ async def cb_doc_act(callback: CallbackQuery) -> None:
     generating_msg = await callback.message.answer("📄 Генерирую акт приёма-передачи...")
 
     try:
+        from aiogram.types import FSInputFile
+        
         filepath = generate_transfer_act(req_id, lot, seller, buyer, carrier)
 
         # Сохраняем в БД
@@ -355,12 +357,11 @@ async def cb_doc_act(callback: CallbackQuery) -> None:
         })
 
         # Отправляем файл
-        with open(filepath, "rb") as f:
-            sent = await callback.message.answer_document(
-                document=f,
-                filename=f"Акт_приёма-передачи_{req_id}.pdf",
-                caption=f"📋 Акт приёма-передачи по заявке #{req_id}",
-            )
+        document = FSInputFile(filepath, filename=f"Акт_приёма-передачи_{req_id}.pdf")
+        sent = await callback.message.answer_document(
+            document=document,
+            caption=f"📋 Акт приёма-передачи по заявке #{req_id}",
+        )
 
         # Сохраняем tg_file_id для повторной отправки
         if sent.document:
@@ -411,6 +412,8 @@ async def cb_doc_waybill(callback: CallbackQuery) -> None:
     generating_msg = await callback.message.answer("📄 Генерирую транспортную накладную...")
 
     try:
+        from aiogram.types import FSInputFile
+        
         filepath = generate_waybill(
             req_id, lot, seller, buyer, carrier,
             distance_km=req.get("distance_km"),
@@ -423,12 +426,11 @@ async def cb_doc_waybill(callback: CallbackQuery) -> None:
             "file_path": filepath,
         })
 
-        with open(filepath, "rb") as f:
-            sent = await callback.message.answer_document(
-                document=f,
-                filename=f"Транспортная_накладная_{req_id}.pdf",
-                caption=f"🚛 Транспортная накладная по заявке #{req_id}",
-            )
+        document = FSInputFile(filepath, filename=f"Транспортная_накладная_{req_id}.pdf")
+        sent = await callback.message.answer_document(
+            document=document,
+            caption=f"🚛 Транспортная накладная по заявке #{req_id}",
+        )
 
         if sent.document:
             await update_document_tg_file_id(doc_id, sent.document.file_id)
